@@ -52,6 +52,12 @@ type Client struct {
 
 	// 客户端ID
 	id string
+
+	// 用户名
+	username string
+
+	// 会话ID
+	sessionID string
 }
 
 // 消息中心
@@ -105,6 +111,12 @@ func (h *Hub) run() {
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
+		// 结束会话
+		if c.sessionID != "" {
+			if err := endSession(c.sessionID); err != nil {
+				log.Printf("结束会话失败: %v", err)
+			}
+		}
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -123,19 +135,80 @@ func (c *Client) readPump() {
 		// 解析收到的消息
 		var data map[string]interface{}
 		if err := json.Unmarshal(message, &data); err == nil {
-			// 添加发送者ID
-			data["sender"] = c.id
+			// 检查是否是系统消息（如退出消息）
+			if msgType, ok := data["type"].(string); ok && msgType == "system" {
+				// 是系统消息，例如退出通知
+				if content, ok := data["content"].(string); ok {
+					// 广播系统消息
+					data["sender"] = c.id
+					data["username"] = c.username
+					data["timestamp"] = time.Now().Format(time.RFC3339)
 
-			// 重新序列化消息
-			if newMessage, err := json.Marshal(data); err == nil {
-				c.hub.broadcast <- newMessage
+					// 保存系统消息到数据库
+					_, err := saveMessage(content, c.id, c.username, c.sessionID)
+					if err != nil {
+						log.Printf("保存系统消息失败: %v", err)
+					}
+
+					if newMessage, err := json.Marshal(data); err == nil {
+						c.hub.broadcast <- newMessage
+					}
+				}
+			} else if msgType, ok := data["type"].(string); ok && msgType == "chat" {
+				// 普通聊天消息的处理逻辑
+				// 如果是聊天消息，保存到数据库
+				if content, ok := data["content"].(string); ok && content != "" {
+					// 保存消息到数据库
+					_, err := saveMessage(content, c.id, c.username, c.sessionID)
+					if err != nil {
+						log.Printf("保存消息失败: %v", err)
+					}
+
+					// 添加发送者信息
+					data["sender"] = c.id
+					data["username"] = c.username
+					data["timestamp"] = time.Now().Format(time.RFC3339)
+
+					// 重新序列化消息
+					if newMessage, err := json.Marshal(data); err == nil {
+						c.hub.broadcast <- newMessage
+					}
+				}
+			} else if msgType, ok := data["type"].(string); ok && msgType == "history" {
+				// 处理历史消息
+				if content, ok := data["content"].(string); ok && content != "" {
+					// 保存消息到数据库
+					_, err := saveMessage(content, c.id, c.username, c.sessionID)
+					if err != nil {
+						log.Printf("保存历史消息失败: %v", err)
+					}
+
+					// 添加发送者信息
+					data["sender"] = c.id
+					data["username"] = c.username
+					data["timestamp"] = time.Now().Format(time.RFC3339)
+
+					// 重新序列化消息
+					if historyMsg, err := json.Marshal(data); err == nil {
+						c.hub.broadcast <- historyMsg
+					}
+				}
 			}
 		} else {
 			// 如果不是JSON格式，创建一个新的消息
+			content := string(message)
+			// 保存消息到数据库
+			_, err := saveMessage(content, c.id, c.username, c.sessionID)
+			if err != nil {
+				log.Printf("保存消息失败: %v", err)
+			}
+
 			newMessage, _ := json.Marshal(map[string]interface{}{
-				"type":    "chat",
-				"content": string(message),
-				"sender":  c.id,
+				"type":      "chat",
+				"content":   content,
+				"sender":    c.id,
+				"username":  c.username,
+				"timestamp": time.Now().Format(time.RFC3339),
 			})
 			c.hub.broadcast <- newMessage
 		}

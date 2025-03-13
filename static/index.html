@@ -9,18 +9,62 @@
 </head>
 
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <h2>实时对话</h2>
-            <div class="connection-status" id="status">未连接</div>
+    <div class="app-container">
+        <!-- 左侧会话列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3>会话列表</h3>
+                <div class="user-info">
+                    <span id="username-display"></span>
+                    <button id="logout-btn">退出</button>
+                </div>
+            </div>
+
+            <!-- 添加搜索框 -->
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="搜索用户...">
+                <button id="search-btn">搜索</button>
+            </div>
+
+            <!-- 搜索结果容器 -->
+            <div class="search-results" id="search-results">
+                <!-- 搜索结果将通过JavaScript动态添加 -->
+            </div>
+
+            <div class="sessions-list" id="sessions-list">
+                <!-- 会话项将通过JavaScript动态添加 -->
+                <div class="loading-sessions">加载会话中...</div>
+            </div>
         </div>
-        <div class="chat-messages" id="chat-messages"></div>
-        <div class="chat-input">
-            <input type="text" id="message-input" placeholder="输入消息..." disabled>
-            <button id="send-button" disabled>发送</button>
+
+        <!-- 右侧聊天区域 -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2 id="chat-title">实时对话</h2>
+                <div class="connection-status" id="status">未连接</div>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="输入消息..." disabled>
+                <button id="send-button" disabled>发送</button>
+            </div>
         </div>
     </div>
     <script src="/static/script.js"></script>
+    <script>
+        // 检查用户是否已登录
+        document.addEventListener('DOMContentLoaded', function () {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.error("未找到token，请先登录");
+                window.location.href = '/';
+                return;
+            }
+
+            console.log("用户已登录，token存在");
+            // 可以继续加载chat.js
+        });
+    </script>
 </body>
 
 </html>
